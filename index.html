@@ -7,25 +7,24 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React 核心 -->
     <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; background-color: #FFFBEB; font-family: system-ui, -apple-system, sans-serif; }
+        body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; background-color: #FFFBEB; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
         .sketchy-border { border: 2px solid #44403c; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .modal-anim { animation: popIn 0.2s ease-out; }
         @keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+        /* 筆記小點動畫 */
+        .note-dot { animation: pulse-slow 2s infinite; }
+        @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
     </style>
 </head>
 <body>
@@ -34,7 +33,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 1. Firebase 初始化 (失敗會自動略過) ---
+        // --- 1. Firebase ---
         const firebaseConfig = {
             apiKey: "AIzaSyBmSNgnmQ7LjOHE_9irjQ-OpzCp70S3xZE",
             authDomain: "v02457.firebaseapp.com",
@@ -44,7 +43,10 @@
             appId: "1:606551517368:web:b6fbca7d61b42480982c4d"
         };
 
-        let auth = null, db = null;
+        let auth, db;
+        const SYNC_ID = 'our_honey_calendar_v1';
+        const STORAGE_KEY = 'pooh_local_db_final';
+
         try {
             if(typeof firebase !== 'undefined' && !firebase.apps.length) {
                 firebase.initializeApp(firebaseConfig);
@@ -54,17 +56,18 @@
             }
         } catch(e) { console.log("Offline Mode"); }
 
-        const SYNC_ID = 'our_honey_calendar_v1';
-        const STORAGE_KEY = 'pooh_local_db_v7'; // 換新 Key 避免舊資料干擾
+        // --- 2. SVG 圖示 ---
+        const Icons = {
+            ChevronLeft: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>,
+            ChevronRight: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>,
+            Copy: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2 M8 8h6v6"/></svg>,
+            LogOut: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
+            X: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>,
+            MapPin: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>,
+            FileText: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>,
+            Save: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        };
 
-        // --- 2. 圖示 (直接寫 SVG，不透過變數傳遞，避免錯誤) ---
-        const IconLeft = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
-        const IconRight = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
-        const IconCopy = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2 M8 8h6v6"/></svg>;
-        const IconLogOut = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
-        const IconX = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>;
-        const IconMapPin = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
-        
         const CuteSunCloud = () => (
             <svg viewBox="0 0 100 100" className="w-6 h-6 opacity-90 drop-shadow-sm">
                 <filter id="glow"><feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000" floodOpacity="0.1"/></filter>
@@ -78,26 +81,38 @@
             </svg>
         );
 
-        // --- 3. 資料常數 ---
+        // --- 3. 資料與設定 ---
         const STICKERS = {
-            WORK: { emoji: "🐝", label: "早班", color: "text-amber-700", rotate: "-6deg" },
-            OT: { emoji: "🎈", label: "加班", color: "text-rose-700", rotate: "0deg" },
-            LEAVE: { emoji: "🍃", label: "請假", color: "text-lime-700", rotate: "0deg" },
-            VACATION: { emoji: "✈️", label: "出國", color: "text-pink-700", rotate: "0deg" },
-            TRIP: { emoji: "🚘", label: "出遊", color: "text-sky-700", rotate: "-3deg" },
-            OFF: { emoji: "☁️", label: "休假", color: "text-stone-500", rotate: "0deg" },
-            BIRTHDAY: { emoji: "🎂", label: "生日", color: "text-rose-500", rotate: "0deg" }
+            WORK: { emoji: "🐝", label: "早班", rotate: "-6deg" },
+            OT: { emoji: "🎈", label: "加班", rotate: "0deg" },
+            LEAVE: { emoji: "🍃", label: "請假", rotate: "0deg" },
+            VACATION: { emoji: "✈️", label: "出國", rotate: "0deg" },
+            TRIP: { emoji: "🚘", label: "出遊", rotate: "-3deg" },
+            OFF: { emoji: "☁️", label: "休假", rotate: "0deg" },
+            BIRTHDAY: { emoji: "🎂", label: "生日", rotate: "0deg" }
         };
 
-        const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
         const COUNTRY_FLAGS = {
             '日本': '🇯🇵', '京阪': '🇯🇵', '東京': '🇯🇵', '大阪': '🇯🇵', '沖繩': '🇯🇵', '北海道': '🇯🇵',
-            '韓國': '🇰🇷', '首爾': '🇰🇷', '釜山': '🇰🇷', '中國': '🇨🇳', '上海': '🇨🇳', '北京': '🇨🇳',
-            '香港': '🇭🇰', '澳門': '🇲🇴', '台灣': '🇹🇼', '泰國': '🇹🇭', '曼谷': '🇹🇭', '清邁': '🇹🇭',
-            '越南': '🇻🇳', '峴港': '🇻🇳', '河內': '🇻🇳', '新加坡': '🇸🇬', '馬來西亞': '🇲🇾', '沙巴': '🇲🇾',
-            '菲律賓': '🇵🇭', '宿霧': '🇵🇭', '長灘島': '🇵🇭', '印尼': '🇮🇩', '峇里島': '🇮🇩',
+            '韓國': '🇰🇷', '首爾': '🇰🇷', '釜山': '🇰🇷',
+            '中國': '🇨🇳', '上海': '🇨🇳', '北京': '🇨🇳',
+            '香港': '🇭🇰', '澳門': '🇲🇴', '台灣': '🇹🇼',
+            '泰國': '🇹🇭', '曼谷': '🇹🇭', '清邁': '🇹🇭',
+            '越南': '🇻🇳', '峴港': '🇻🇳', '河內': '🇻🇳',
+            '新加坡': '🇸🇬', '馬來西亞': '🇲🇾', '沙巴': '🇲🇾',
+            '菲律賓': '🇵🇭', '宿霧': '🇵🇭', '長灘島': '🇵🇭',
+            '印尼': '🇮🇩', '峇里島': '🇮🇩',
             '英國': '🇬🇧', '法國': '🇫🇷', '德國': '🇩🇪', '義大利': '🇮🇹', '瑞士': '🇨🇭', '荷蘭': '🇳🇱',
             '美國': '🇺🇸', '關島': '🇬🇺', '夏威夷': '🇺🇸', '加拿大': '🇨🇦', '澳洲': '🇦🇺', '土耳其': '🇹🇷'
+        };
+
+        // 全域國旗偵測 (修復版)
+        const getFlag = (txt) => {
+            if(!txt) return null;
+            for(const key in COUNTRY_FLAGS) {
+                if(txt.includes(key)) return COUNTRY_FLAGS[key];
+            }
+            return null;
         };
 
         const LONG_HOLIDAYS = [
@@ -109,6 +124,7 @@
             { start: '2026-05-01', end: '2026-05-03' }, { start: '2026-06-19', end: '2026-06-21' }, { start: '2026-09-25', end: '2026-09-28' },
             { start: '2026-10-09', end: '2026-10-11' }, { start: '2026-10-24', end: '2026-10-26' }, { start: '2026-12-25', end: '2026-12-27' }
         ];
+
         const isLongHoliday = (d) => LONG_HOLIDAYS.find(r => d >= r.start && d <= r.end);
 
         const HOLIDAYS = {
@@ -118,76 +134,93 @@
             '2026-02-28': '228', '2026-04-04': '兒童節', '2026-04-05': '清明節', '2026-05-01': '勞動節', '2026-06-19': '端午節', '2026-09-25': '中秋節', '2026-09-28': '教師節', '2026-10-10': '國慶日', '2026-10-25': '光復節', '2026-12-25': '行憲日'
         };
 
+        const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
         // --- 4. 主程式 ---
         function App() {
-            // 狀態 (直接讀取本地存檔，確保秒開)
+            // LocalStorage 初始化
             const [mods, setMods] = useState(() => {
-                try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) { return {}; }
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    return saved ? JSON.parse(saved).mods || {} : {};
+                } catch(e) { return {}; }
             });
-            
+
+            const [user, setUser] = useState(null);
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedDay, setSelectedDay] = useState(null);
             const [tempDest, setTempDest] = useState('');
+            const [tempNote, setTempNote] = useState('');
             const [exitConfirm, setExitConfirm] = useState(false);
-            const [user, setUser] = useState(null);
 
-            // 滑動 Ref
+            // 滑動
             const touchRef = useRef({ start: null, end: null });
 
-            // 國旗
-            const getFlag = (txt) => {
-                if(!txt) return null;
-                for(const key in COUNTRY_FLAGS) {
-                    if(txt.includes(key)) return COUNTRY_FLAGS[key];
-                }
-                return null;
-            }
-
-            // 同步邏輯
+            // 存檔監聽
             useEffect(() => {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(mods));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ mods: mods }));
             }, [mods]);
 
+            // Auth & Sync
             useEffect(() => {
                 if(!auth) return;
-                auth.onAuthStateChanged(async u => {
-                    if (u) setUser(u);
-                    else try { await auth.signInAnonymously(); } catch(e){}
+                const unsubAuth = auth.onAuthStateChanged(async u => {
+                    if (u) {
+                        setUser(u);
+                        // Sync
+                        if (db) {
+                             db.collection('calendars').doc(SYNC_ID).onSnapshot(doc => {
+                                if (doc.exists) {
+                                    setMods(doc.data().mods || {});
+                                }
+                            }, err => console.log("Offline"));
+                        }
+                    } else {
+                        try { await auth.signInAnonymously(); } catch(e){}
+                    }
                 });
+                return () => unsubAuth();
             }, []);
 
             useEffect(() => {
-                if (!user || !db) return;
-                try {
-                    const unsub = db.collection('calendars').doc(SYNC_ID)
-                        .onSnapshot(doc => {
-                            if (doc.exists) setMods(doc.data().mods || {});
-                        });
-                    return () => unsub();
-                } catch(e){}
-            }, [user]);
-
-            useEffect(() => {
                 if (selectedDay) {
-                    const data = mods[selectedDay.dateStr];
-                    setTempDest((data && data.destination) ? data.destination : '');
+                    const data = mods[selectedDay.dateStr] || {};
+                    setTempDest(data.destination || '');
+                    setTempNote(data.note || '');
                 }
             }, [selectedDay]);
 
-            // 動作
             const changeMonth = (d) => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + d)));
 
-            const handleUpdate = async (dateStr, type) => {
+            const handleUpdate = async (type) => {
+                if (!selectedDay) return;
+                const dateStr = selectedDay.dateStr;
                 const newMods = { ...mods };
-                if (type === 'RESET') delete newMods[dateStr];
-                else newMods[dateStr] = { type: type, destination: tempDest };
+                
+                const existingData = newMods[dateStr] || {};
+
+                if (type === 'RESET') {
+                    // RESET: 清除狀態，保留文字 (除非全空)
+                    const newData = { ...existingData, type: null, destination: tempDest, note: tempNote };
+                    if (!newData.destination && !newData.note) delete newMods[dateStr];
+                    else newMods[dateStr] = newData;
+                } else if (type === 'SAVE_TEXT') {
+                    // SAVE_TEXT: 僅存文字
+                    const newData = { ...existingData, destination: tempDest, note: tempNote };
+                    if (!newData.type && !newData.destination && !newData.note) delete newMods[dateStr];
+                    else newMods[dateStr] = newData;
+                } else {
+                    // 設定狀態
+                    newMods[dateStr] = { type: type, destination: tempDest, note: tempNote };
+                }
                 
                 setMods(newMods);
                 setSelectedDay(null);
                 setTempDest('');
+                setTempNote('');
                 
-                if (user && db) {
-                    try { await db.collection('calendars').doc(SYNC_ID).set({ mods: newMods }, { merge: true }); } catch(e){}
+                if (db && auth.currentUser) {
+                    db.collection('calendars').doc(SYNC_ID).set({ mods: newMods }, { merge: true }).catch(()=>{});
                 }
             };
 
@@ -201,11 +234,10 @@
                 const month = currentDate.getMonth() + 1;
                 const daysInMonth = new Date(year, month, 0).getDate();
                 let text = `${year}年${month}月 B班班表 🍯\n`;
-                
                 for(let i=1; i<=daysInMonth; i++) {
+                    const dateObj = new Date(year, month-1, i);
                     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-                    const dObj = new Date(year, month-1, i);
-                    const diff = Math.round((dObj - new Date(2025,0,1)) / (1000*60*60*24));
+                    const diff = Math.round((dateObj - new Date(2025,0,1)) / (1000*60*60*24));
                     const baseWork = (((diff % 4) + 4) % 4) < 2;
                     const mod = mods[dateStr];
                     const type = mod ? mod.type : null;
@@ -218,19 +250,19 @@
                     else if(baseWork) icon = '🐝';
 
                     let status = type ? STICKERS[type].label : (baseWork ? '早班' : '休假');
-                    if(mod && mod.destination) status += ` (${mod.destination})`;
-                    text += `${month}/${i} (${WEEKDAYS[dObj.getDay()]}): ${icon} ${status}\n`;
+                    if(mod?.destination) status += ` (${mod.destination})`;
+                    if(mod?.note) status += ` [${mod.note}]`;
+                    text += `${month}/${i} (${WEEKDAYS[dateObj.getDay()]}): ${icon} ${status}\n`;
                 }
-
-                // Fallback Copy
+                
                 const ta = document.createElement("textarea");
-                ta.value = text; ta.style.position="fixed";
+                ta.value = text; ta.style.position="fixed"; 
                 document.body.appendChild(ta); ta.focus(); ta.select();
-                try { document.execCommand('copy'); alert("已複製！"); } catch(e) { alert("複製失敗"); }
+                try { document.execCommand('copy'); alert("已複製！"); } 
+                catch (e) { alert("複製失敗"); }
                 document.body.removeChild(ta);
             };
 
-            // 統計
             const stats = useMemo(() => {
                 const year = currentDate.getFullYear();
                 const month = currentDate.getMonth();
@@ -242,26 +274,25 @@
                     const baseWork = (((diff % 4) + 4) % 4) < 2;
                     const mod = mods[dateStr];
                     const type = mod ? mod.type : null;
-                    if(type==='OT') ot++;
+                    if(type === 'OT') ot++;
                     else if(['LEAVE','VACATION','TRIP'].includes(type)) leave++;
-                    else if(baseWork && type!=='RESET') work++;
+                    else if(baseWork && (!type || type==='OT')) work++;
                 }
                 return { work, ot, leave };
             }, [currentDate, mods]);
 
-            // Touch
-            const onTouchStart = e => { touchRef.current.start = e.targetTouches[0].clientX; touchRef.current.end = null; };
-            const onTouchMove = e => touchRef.current.end = e.targetTouches[0].clientX;
-            const onTouchEnd = () => {
-                if(!touchRef.current.start || !touchRef.current.end) return;
-                const diff = touchRef.current.start - touchRef.current.end;
-                if (diff > 50) changeMonth(1); else if (diff < -50) changeMonth(-1);
-            };
-
-            // Render Helper
             const renderSticker = (config) => (
                 <span className="text-lg filter drop-shadow-sm transition-transform inline-block" style={{transform: `rotate(${config.rotate})`}}>{config.emoji}</span>
             );
+
+            const onTouchStart = e => { touchRef.current.start = e.targetTouches[0].clientX; touchRef.current.end = null; };
+            const onTouchMove = e => touchRef.current.end = e.targetTouches[0].clientX;
+            const onTouchEnd = () => {
+                const { start, end } = touchRef.current;
+                if (!start || !end) return;
+                const diff = start - end;
+                if (diff > 50) changeMonth(1); else if (diff < -50) changeMonth(-1);
+            };
 
             const renderDays = () => {
                 const year = currentDate.getFullYear();
@@ -280,6 +311,7 @@
 
                     const mod = mods[dateStr];
                     const type = mod ? mod.type : null;
+                    const hasNote = mod?.note && mod.note.trim().length > 0;
                     const holiday = HOLIDAYS[dateStr];
                     const isLong = isLongHoliday(dateStr);
                     const isWeekend = dateObj.getDay()===0 || dateObj.getDay()===6;
@@ -306,7 +338,7 @@
                     if (isBirthday && !type) sticker = <span className="text-xl animate-bounce inline-block">🎂</span>;
                     else if (type) {
                         const s = STICKERS[type];
-                        sticker = renderSticker(s);
+                        sticker = s ? renderSticker(s) : null;
                     } else if (baseWork) {
                         sticker = renderSticker(STICKERS.WORK);
                     } else {
@@ -314,11 +346,20 @@
                     }
 
                     days.push(
-                        <div key={i} onClick={() => setSelectedDay({dateStr, baseWork})} className={`h-[5.2rem] p-1 border-2 ${border} ${bg} rounded-2xl relative active:scale-95 transition-all overflow-hidden shadow-sm ${isToday?'ring-2 ring-amber-400 animate-pulse':''} sketchy-border`}>
+                        <div 
+                            key={i} 
+                            onClick={() => setSelectedDay({dateStr, baseWork})} 
+                            className={`h-[5.2rem] p-1 border-2 ${border} ${bg} rounded-2xl relative active:scale-95 transition-all overflow-hidden shadow-sm ${isToday?'ring-2 ring-amber-400 animate-pulse':''} sketchy-border`}
+                        >
                             <div className="flex flex-col items-center justify-between h-full py-0.5 relative z-10 pointer-events-none">
                                 <div className="h-6 flex items-center justify-center w-full">{display}</div>
                                 <div className={`flex items-center justify-center -mt-1 pb-1 ${isToday?'animate-bounce':''}`}>{sticker}</div>
                             </div>
+                            {hasNote && (
+                                <div className="absolute bottom-1 right-1">
+                                    <Icons.FileText className="w-3 h-3 text-stone-400 note-dot" />
+                                </div>
+                            )}
                         </div>
                     );
                 }
@@ -331,16 +372,16 @@
                         <div className="flex justify-between items-center mb-4">
                              <h1 className="text-2xl font-black text-[#78350F] tracking-wide flex items-center gap-2"><span className="text-3xl drop-shadow-md">🐻</span>百畝森林班表</h1>
                              <div className="flex gap-1">
-                                <button onClick={copySchedule} className="p-3 bg-white/40 rounded-full text-[#78350F] active:scale-90 border-2 border-[#78350F]/10"><IconCopy /></button>
-                                <button onClick={handleExit} className={`${exitConfirm?'bg-[#EF4444] animate-pulse':'bg-[#F87171]'} p-3 rounded-full text-white active:scale-90 border-2 border-[#B91C1C]/10`}>{exitConfirm?<IconX />:<IconLogOut />}</button>
+                                <button onClick={copySchedule} className="p-3 bg-white/40 rounded-full text-[#78350F] active:scale-90 border-2 border-[#78350F]/10"><Icons.Copy className="w-5 h-5"/></button>
+                                <button onClick={handleExit} className={`${exitConfirm?'bg-[#EF4444] animate-pulse':'bg-[#F87171]'} p-3 rounded-full text-white active:scale-90 border-2 border-[#B91C1C]/10`}>{exitConfirm?<Icons.X className="w-5 h-5"/>:<Icons.LogOut className="w-5 h-5"/>}</button>
                              </div>
                         </div>
                         <div className="flex justify-between items-center px-2">
-                            <button onClick={()=>changeMonth(-1)} className="p-2 text-[#78350F] active:scale-90"><IconLeft /></button>
+                            <button onClick={()=>changeMonth(-1)} className="p-2 text-[#78350F] active:scale-90"><Icons.ChevronLeft className="w-8 h-8"/></button>
                             <div className="text-xl font-black text-[#78350F] bg-white/50 px-6 py-2 rounded-2xl border-2 border-white shadow-inner sketchy-border">
                                 {currentDate.getFullYear()} <span className="text-[#78350F]/40 mx-1">/</span> {currentDate.getMonth()+1}月
                             </div>
-                            <button onClick={()=>changeMonth(1)} className="p-2 text-[#78350F] active:scale-90"><IconRight /></button>
+                            <button onClick={()=>changeMonth(1)} className="p-2 text-[#78350F] active:scale-90"><Icons.ChevronRight className="w-8 h-8"/></button>
                         </div>
                         <div className="flex justify-around mt-4 bg-white/60 rounded-2xl p-2 border-2 border-white/50 shadow-sm sketchy-border">
                             <div className="flex items-center gap-2">{renderSticker(STICKERS.WORK)}<span className="text-[10px] text-[#78350F] font-bold bg-[#FDE047]/50 px-2 rounded-full">應出勤</span><span className="text-xl font-black text-[#78350F]">{stats.work}</span></div>
@@ -353,7 +394,7 @@
 
                     <div className="flex-1 overflow-y-auto p-2 no-scrollbar">
                         <div className="grid grid-cols-7 mb-2 text-center font-black text-[#92400E] text-sm">
-                            {WEEKDAYS.map((d,i)=><div key={d} className={i===0||i===6?'text-[#F43F5E]':''}>{d}</div>)}
+                            {['日','一','二','三','四','五','六'].map((d,i)=><div key={d} className={i===0||i===6?'text-[#F43F5E]':''}>{d}</div>)}
                         </div>
                         <div className="grid grid-cols-7 gap-0 pb-20">
                             {renderDays()}
@@ -363,29 +404,36 @@
                     {selectedDay && (
                         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 modal-anim" onClick={()=>setSelectedDay(null)}>
                             <div className="bg-[#FFFBEB] w-full max-w-[360px] rounded-[30px] border-4 border-[#FDE047] overflow-hidden shadow-2xl sketchy-border" onClick={e=>e.stopPropagation()}>
-                                <div className="bg-[#FDE047] p-4 text-center border-b-2 border-[#FCD34D]">
+                                <div className="bg-[#FDE047] p-4 text-center border-b-2 border-[#FCD34D] flex justify-between items-center px-6">
                                     <h3 className="text-2xl font-black text-[#78350F]">編輯行程 🍯</h3>
+                                    <button onClick={()=>handleUpdate('SAVE_TEXT')} className="bg-white/40 p-2 rounded-full text-[#78350F] active:scale-95 border-2 border-[#78350F]/20">
+                                        <Icons.Save className="w-5 h-5"/>
+                                    </button>
                                 </div>
                                 <div className="p-6 space-y-4">
                                     <div className="relative">
-                                        <div className="absolute left-4 top-3 text-[#F59E0B]"><IconMapPin /></div>
+                                        <div className="absolute left-4 top-3 text-[#F59E0B]"><Icons.MapPin className="w-5 h-5"/></div>
                                         <input type="text" value={tempDest} onChange={e=>setTempDest(e.target.value)} placeholder="地點 (如: 日本)..." className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-[#FDE047] focus:outline-none font-bold text-[#78350F] placeholder-[#FCD34D] sketchy-border" />
                                         {getFlag(tempDest) && <div className="absolute right-4 top-2 text-2xl animate-bounce">{getFlag(tempDest)}</div>}
+                                    </div>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-3 text-[#F59E0B]"><Icons.FileText className="w-5 h-5"/></div>
+                                        <textarea value={tempNote} onChange={e=>setTempNote(e.target.value)} placeholder="代辦事項 (例如: 10點開會)..." className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-[#FDE047] focus:outline-none font-bold text-[#78350F] placeholder-[#FCD34D] sketchy-border resize-none h-20"></textarea>
                                     </div>
                                     
                                     {selectedDay.baseWork ? (
                                         <div className="grid grid-cols-2 gap-3">
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'LEAVE')} className="bg-[#ECFCCB] p-4 rounded-2xl border-2 border-[#BEF264] text-[#4D7C0F] font-bold active:scale-95 sketchy-border">🍃 請假</button>
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'TRIP')} className="bg-[#E0F2FE] p-4 rounded-2xl border-2 border-[#7DD3FC] text-[#0369A1] font-bold active:scale-95 sketchy-border">🚘 出遊</button>
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'VACATION')} className="col-span-2 bg-[#FCE7F3] p-4 rounded-2xl border-2 border-[#F9A8D4] text-[#BE185D] font-bold active:scale-95 sketchy-border">✈️ 出國</button>
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'RESET')} className="col-span-2 bg-stone-100 p-4 rounded-2xl border-2 border-stone-200 text-stone-500 font-bold active:scale-95 sketchy-border">🐝 恢復上班</button>
+                                            <button onClick={()=>handleUpdate('LEAVE')} className="bg-[#ECFCCB] p-4 rounded-2xl border-2 border-[#BEF264] text-[#4D7C0F] font-bold active:scale-95 sketchy-border">🍃 請假</button>
+                                            <button onClick={()=>handleUpdate('TRIP')} className="bg-[#E0F2FE] p-4 rounded-2xl border-2 border-[#7DD3FC] text-[#0369A1] font-bold active:scale-95 sketchy-border">🚘 出遊</button>
+                                            <button onClick={()=>handleUpdate('VACATION')} className="col-span-2 bg-[#FCE7F3] p-4 rounded-2xl border-2 border-[#F9A8D4] text-[#BE185D] font-bold active:scale-95 sketchy-border">✈️ 出國</button>
+                                            <button onClick={()=>handleUpdate('RESET')} className="col-span-2 bg-stone-100 p-4 rounded-2xl border-2 border-stone-200 text-stone-500 font-bold active:scale-95 sketchy-border">🐝 恢復上班</button>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-3">
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'OT')} className="bg-[#FEE2E2] p-4 rounded-2xl border-2 border-[#F87171] text-[#B91C1C] font-bold active:scale-95 sketchy-border">🎈 加班</button>
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'TRIP')} className="bg-[#E0F2FE] p-4 rounded-2xl border-2 border-[#7DD3FC] text-[#0369A1] font-bold active:scale-95 sketchy-border">🚘 出遊</button>
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'VACATION')} className="col-span-2 bg-[#FCE7F3] p-4 rounded-2xl border-2 border-[#F9A8D4] text-[#BE185D] font-bold active:scale-95 sketchy-border">✈️ 出國</button>
-                                            <button onClick={()=>handleUpdate(selectedDay.dateStr,'RESET')} className="col-span-2 bg-stone-100 p-4 rounded-2xl border-2 border-stone-200 text-stone-500 font-bold active:scale-95 sketchy-border">☁️ 恢復休假</button>
+                                            <button onClick={()=>handleUpdate('OT')} className="bg-[#FEE2E2] p-4 rounded-2xl border-2 border-[#F87171] text-[#B91C1C] font-bold active:scale-95 sketchy-border">🎈 加班</button>
+                                            <button onClick={()=>handleUpdate('TRIP')} className="bg-[#E0F2FE] p-4 rounded-2xl border-2 border-[#7DD3FC] text-[#0369A1] font-bold active:scale-95 sketchy-border">🚘 出遊</button>
+                                            <button onClick={()=>handleUpdate('VACATION')} className="col-span-2 bg-[#FCE7F3] p-4 rounded-2xl border-2 border-[#F9A8D4] text-[#BE185D] font-bold active:scale-95 sketchy-border">✈️ 出國</button>
+                                            <button onClick={()=>handleUpdate('RESET')} className="col-span-2 bg-stone-100 p-4 rounded-2xl border-2 border-stone-200 text-stone-500 font-bold active:scale-95 sketchy-border">☁️ 恢復休假</button>
                                         </div>
                                     )}
                                 </div>
