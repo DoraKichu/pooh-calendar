@@ -8,23 +8,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://img.icons8.com/color/96/winnie-the-pooh.png">
     
-    <!-- 1. 樣式 -->
+    <!-- 1. 樣式庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. 除錯工具 vConsole (右下角綠色按鈕) -->
-    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-    <script>
-      var vConsole = new VConsole();
-    </script>
-    
-    <!-- 3. React 核心 -->
-    <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    
-    <!-- 4. Babel -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 2. React 核心 (更換為 cdnjs，比 unpkg 更穩定) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
-    <!-- 5. Firebase -->
+    <!-- 3. Firebase (維持不變) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -42,38 +34,51 @@
         .click-effect:active { transform: scale(0.95); transition: transform 0.1s; }
         .strike-through { text-decoration: line-through; opacity: 0.6; }
         
-        #error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); z-index: 10000; padding: 20px; color: red; overflow: auto; font-family: monospace; }
+        /* 錯誤顯示區塊 (預設隱藏) */
+        #fatal-error {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: white; z-index: 99999; padding: 20px; color: red; overflow: auto;
+            font-family: monospace; white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
+    <!-- 錯誤顯示 -->
+    <div id="fatal-error">
+        <h2 class="text-xl font-bold mb-2">⚠️ 程式崩潰</h2>
+        <p class="text-black mb-4">請截圖傳給工程師：</p>
+        <div id="error-content" class="border p-2 bg-gray-100 text-sm"></div>
+    </div>
+
+    <!-- 錯誤攔截腳本 -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            var box = document.getElementById('fatal-error');
+            var content = document.getElementById('error-content');
+            box.style.display = 'block';
+            content.innerHTML += `Time: ${new Date().toLocaleTimeString()}\nMsg: ${msg}\nLine: ${line}\n\n`;
+            
+            // 隱藏載入畫面
+            var loader = document.getElementById('app-loader');
+            if(loader) loader.style.display = 'none';
+        };
+    </script>
+
     <!-- 載入畫面 -->
     <div id="app-loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#FFFBEB]">
         <div class="animate-spin rounded-full h-10 w-10 border-4 border-amber-400 border-t-amber-600 mb-4"></div>
         <div class="text-amber-800 font-bold text-lg">正在呼叫維尼...🍯</div>
-        <div class="text-xs text-stone-400 mt-2">v5.0 Safe Mode</div>
+        <div id="loading-status" class="text-xs text-stone-400 mt-2">載入核心元件中...</div>
     </div>
-
-    <!-- 錯誤顯示區 -->
-    <div id="error-box"></div>
 
     <div id="root"></div>
 
-    <script>
-        // 全域錯誤捕捉
-        window.onerror = function(msg, url, line, col, error) {
-            var box = document.getElementById('error-box');
-            box.style.display = 'block';
-            box.innerHTML += "<h3 style='font-size:1.2rem; font-weight:bold; margin-bottom:10px;'>⚠️ 發生錯誤</h3>" + 
-                             "<p><strong>Msg:</strong> " + msg + "</p>" +
-                             "<p><strong>Line:</strong> " + line + "</p>";
-            if(error && error.stack) {
-                box.innerHTML += "<pre style='background:#eee; padding:5px; font-size:10px; overflow:scroll;'>" + error.stack + "</pre>";
-            }
-            document.getElementById('app-loader').style.display = 'none';
-        };
-    </script>
-
     <script type="text/babel">
+        // 檢查 React 是否成功載入
+        if (typeof React === 'undefined') {
+            throw new Error("React 載入失敗，可能是網路問題阻擋了 CDN");
+        }
+
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- 1. Firebase 初始化 ---
@@ -91,14 +96,19 @@
 
         let auth = null, db = null;
         try {
-            if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
+            if (typeof firebase !== 'undefined' && firebase.app) {
+                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
                 auth = firebase.auth();
                 db = firebase.firestore();
                 db.enablePersistence({ synchronizeTabs: true }).catch(function(){});
+                // 更新載入狀態文字
+                const status = document.getElementById('loading-status');
+                if(status) status.innerText = "資料庫連線中...";
+            } else {
+                console.warn("Firebase SDK 未載入");
             }
         } catch (e) {
-            console.warn("Firebase Init Failed", e);
+            console.warn("Firebase Init Failed, using Offline Mode");
         }
 
         // --- 2. 圖示 (SVG) ---
@@ -140,14 +150,10 @@
         const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
         const COUNTRY_FLAGS = {
             '日本': '🇯🇵', '京阪': '🇯🇵', '東京': '🇯🇵', '大阪': '🇯🇵', '沖繩': '🇯🇵', '北海道': '🇯🇵',
-            '韓國': '🇰🇷', '首爾': '🇰🇷', '釜山': '🇰🇷',
-            '中國': '🇨🇳', '上海': '🇨🇳', '北京': '🇨🇳',
-            '香港': '🇭🇰', '澳門': '🇲🇴', '台灣': '🇹🇼',
-            '泰國': '🇹🇭', '曼谷': '🇹🇭', '清邁': '🇹🇭',
-            '越南': '🇻🇳', '峴港': '🇻🇳', '河內': '🇻🇳',
-            '新加坡': '🇸🇬', '馬來西亞': '🇲🇾', '沙巴': '🇲🇾',
-            '菲律賓': '🇵🇭', '宿霧': '🇵🇭', '長灘島': '🇵🇭',
-            '印尼': '🇮🇩', '峇里島': '🇮🇩',
+            '韓國': '🇰🇷', '首爾': '🇰🇷', '釜山': '🇰🇷', '中國': '🇨🇳', '上海': '🇨🇳', '北京': '🇨🇳',
+            '香港': '🇭🇰', '澳門': '🇲🇴', '台灣': '🇹🇼', '泰國': '🇹🇭', '曼谷': '🇹🇭', '清邁': '🇹🇭',
+            '越南': '🇻🇳', '峴港': '🇻🇳', '河內': '🇻🇳', '新加坡': '🇸🇬', '馬來西亞': '🇲🇾', '沙巴': '🇲🇾',
+            '菲律賓': '🇵🇭', '宿霧': '🇵🇭', '長灘島': '🇵🇭', '印尼': '🇮🇩', '峇里島': '🇮🇩',
             '英國': '🇬🇧', '法國': '🇫🇷', '德國': '🇩🇪', '義大利': '🇮🇹', '瑞士': '🇨🇭', '荷蘭': '🇳🇱',
             '美國': '🇺🇸', '關島': '🇬🇺', '夏威夷': '🇺🇸', '加拿大': '🇨🇦', '澳洲': '🇦🇺', '土耳其': '🇹🇷'
         };
@@ -203,7 +209,6 @@
             });
 
             const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedDay, setSelectedDay] = useState(null);
             const [tempDest, setTempDest] = useState('');
@@ -211,6 +216,7 @@
             const [isDone, setIsDone] = useState(false);
             const [exitConfirm, setExitConfirm] = useState(false);
 
+            // 滑動
             const touchRef = useRef({ start: null, end: null });
 
             // 關閉 Loading
@@ -245,7 +251,6 @@
                     } else {
                         try { await auth.signInAnonymously(); } catch(e){}
                     }
-                    setLoading(false);
                 });
                 return () => unsubAuth();
             }, []);
@@ -355,8 +360,7 @@
                     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
                     const diff = Math.round((new Date(year, month, i) - new Date(2025,0,1)) / (1000*60*60*24));
                     const baseWork = (((diff % 4) + 4) % 4) < 2;
-                    const mod = mods[dateStr];
-                    const type = mod ? mod.type : null;
+                    const type = mods[dateStr] ? mods[dateStr].type : null;
                     if(type === 'OT') ot++;
                     else if(['LEAVE','VACATION','TRIP'].includes(type)) leave++;
                     else if(baseWork && type!=='RESET') work++;
@@ -394,9 +398,7 @@
 
                     const mod = mods[dateStr];
                     const type = mod ? mod.type : null;
-                    // Safe Access
                     const hasNote = mod && mod.note && mod.note.trim().length > 0;
-                    
                     const holiday = HOLIDAYS[dateStr];
                     const isLong = isLongHoliday(dateStr);
                     const isWeekend = dateObj.getDay()===0 || dateObj.getDay()===6;
@@ -450,8 +452,6 @@
                 }
                 return days;
             };
-
-            if (loading) return null;
 
             return (
                 <div className="max-w-[480px] mx-auto h-screen flex flex-col bg-[#FFFBEB] font-sans shadow-2xl relative" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
