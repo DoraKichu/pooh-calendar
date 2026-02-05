@@ -8,15 +8,23 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://img.icons8.com/color/96/winnie-the-pooh.png">
     
-    <!-- 1. 樣式庫 -->
+    <!-- 1. 樣式 -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. React 核心 -->
+    <!-- 2. 除錯工具 vConsole (右下角綠色按鈕) -->
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+    <script>
+      var vConsole = new VConsole();
+    </script>
+    
+    <!-- 3. React 核心 -->
     <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    
+    <!-- 4. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 3. Firebase -->
+    <!-- 5. Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -33,30 +41,42 @@
         .modal-anim { animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
         .click-effect:active { transform: scale(0.95); transition: transform 0.1s; }
         .strike-through { text-decoration: line-through; opacity: 0.6; }
+        
+        #error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); z-index: 10000; padding: 20px; color: red; overflow: auto; font-family: monospace; }
     </style>
 </head>
 <body>
-    <div id="error-box" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.95); z-index:9999; padding:20px; color:red; overflow:auto;"></div>
-    <script>
-        window.onerror = function(msg, url, line) {
-            var box = document.getElementById('error-box');
-            box.style.display = 'block';
-            box.innerHTML += "<h3>發生錯誤</h3><p>" + msg + "</p><p>Line: " + line + "</p>";
-            var loader = document.getElementById('app-loader');
-            if(loader) loader.style.display = 'none';
-        };
-    </script>
-
+    <!-- 載入畫面 -->
     <div id="app-loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#FFFBEB]">
         <div class="animate-spin rounded-full h-10 w-10 border-4 border-amber-400 border-t-amber-600 mb-4"></div>
         <div class="text-amber-800 font-bold text-lg">正在呼叫維尼...🍯</div>
+        <div class="text-xs text-stone-400 mt-2">v5.0 Safe Mode</div>
     </div>
 
+    <!-- 錯誤顯示區 -->
+    <div id="error-box"></div>
+
     <div id="root"></div>
+
+    <script>
+        // 全域錯誤捕捉
+        window.onerror = function(msg, url, line, col, error) {
+            var box = document.getElementById('error-box');
+            box.style.display = 'block';
+            box.innerHTML += "<h3 style='font-size:1.2rem; font-weight:bold; margin-bottom:10px;'>⚠️ 發生錯誤</h3>" + 
+                             "<p><strong>Msg:</strong> " + msg + "</p>" +
+                             "<p><strong>Line:</strong> " + line + "</p>";
+            if(error && error.stack) {
+                box.innerHTML += "<pre style='background:#eee; padding:5px; font-size:10px; overflow:scroll;'>" + error.stack + "</pre>";
+            }
+            document.getElementById('app-loader').style.display = 'none';
+        };
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
+        // --- 1. Firebase 初始化 ---
         const firebaseConfig = {
             apiKey: "AIzaSyBmSNgnmQ7LjOHE_9irjQ-OpzCp70S3xZE",
             authDomain: "v02457.firebaseapp.com",
@@ -67,7 +87,7 @@
         };
 
         const SYNC_ID = 'our_honey_calendar_v1';
-        const STORAGE_KEY = 'pooh_db_final_v3';
+        const STORAGE_KEY = 'pooh_db_final_v5';
 
         let auth = null, db = null;
         try {
@@ -78,9 +98,10 @@
                 db.enablePersistence({ synchronizeTabs: true }).catch(function(){});
             }
         } catch (e) {
-            console.warn("Firebase Init Failed, using Offline Mode");
+            console.warn("Firebase Init Failed", e);
         }
 
+        // --- 2. 圖示 (SVG) ---
         const IconChevronLeft = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
         const IconChevronRight = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
         const IconCopy = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2 M8 8h6v6"/></svg>;
@@ -91,7 +112,6 @@
         const IconFileText = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>;
         const IconCheck = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
         const IconRotateCcw = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/></svg>;
-        const IconList = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
 
         const CuteSunCloud = () => (
             <svg viewBox="0 0 100 100" className="w-6 h-6 opacity-90 drop-shadow-sm">
@@ -106,6 +126,7 @@
             </svg>
         );
 
+        // --- 3. 資料與邏輯 ---
         const STICKERS = {
             WORK: { emoji: "🐝", label: "早班", rotate: "-6deg" },
             OT: { emoji: "🎈", label: "加班", rotate: "0deg" },
@@ -158,6 +179,7 @@
             return null;
         }
 
+        // 傳統複製方法
         const fallbackCopy = (text) => {
             const textArea = document.createElement("textarea");
             textArea.value = text;
@@ -169,11 +191,14 @@
             document.body.removeChild(textArea);
         };
 
+        // --- 4. App 元件 ---
         function App() {
+            // LocalStorage 初始化
             const [mods, setMods] = useState(() => {
                 try {
                     const saved = localStorage.getItem(STORAGE_KEY);
-                    return saved ? JSON.parse(saved).mods || {} : {};
+                    // 安全解析：使用 && 避免 ?. 語法
+                    return saved ? (JSON.parse(saved).mods || {}) : {};
                 } catch(e) { return {}; }
             });
 
@@ -188,15 +213,18 @@
 
             const touchRef = useRef({ start: null, end: null });
 
+            // 關閉 Loading
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
                 if(loader) loader.style.display = 'none';
             }, []);
 
+            // 儲存到 LocalStorage
             useEffect(() => {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ mods: mods }));
             }, [mods]);
 
+            // Auth & Sync
             useEffect(() => {
                 if(!auth) return;
                 const unsubAuth = auth.onAuthStateChanged(async u => {
@@ -222,6 +250,7 @@
                 return () => unsubAuth();
             }, []);
 
+            // 更新輸入框
             useEffect(() => {
                 if (selectedDay) {
                     const data = mods[selectedDay.dateStr] || {};
@@ -231,25 +260,26 @@
                 }
             }, [selectedDay]);
 
-            // --- 待辦事項 (Upcoming) ---
+            // 🌟 待辦事項列表 (Safe Mode) 🌟
             const upcomingEvents = useMemo(() => {
                 const today = new Date(); 
                 today.setHours(0,0,0,0);
                 const events = [];
-                for (const [key, val] of Object.entries(mods)) {
-                    if (!val) continue;
-                    // 解析日期字串 YYYY-MM-DD
+                // Object.entries + forEach 替代 for-of
+                Object.keys(mods).forEach(key => {
+                    const val = mods[key];
+                    if (!val) return;
+                    if (!val.note || val.note.trim() === '') return;
+
                     const parts = key.split('-');
                     if (parts.length === 3) {
                         const d = new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]));
-                        // 條件：是未來日期 且 (有備註 OR 有地點 OR 是特殊行程)
-                        if (d >= today && (val.note || val.destination || (val.type && val.type !== 'OFF' && val.type !== 'WORK'))) {
+                        if (d >= today) {
                             events.push({ date: d, dateStr: key, ...val });
                         }
                     }
-                }
-                // 排序並取前 5 筆
-                return events.sort((a,b) => a.date - b.date).slice(0, 5);
+                });
+                return events.sort((a,b) => a.date - b.date).slice(0, 10);
             }, [mods]);
 
             const changeMonth = (d) => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + d)));
@@ -325,7 +355,8 @@
                     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
                     const diff = Math.round((new Date(year, month, i) - new Date(2025,0,1)) / (1000*60*60*24));
                     const baseWork = (((diff % 4) + 4) % 4) < 2;
-                    const type = mods[dateStr] ? mods[dateStr].type : null;
+                    const mod = mods[dateStr];
+                    const type = mod ? mod.type : null;
                     if(type === 'OT') ot++;
                     else if(['LEAVE','VACATION','TRIP'].includes(type)) leave++;
                     else if(baseWork && type!=='RESET') work++;
@@ -363,7 +394,9 @@
 
                     const mod = mods[dateStr];
                     const type = mod ? mod.type : null;
+                    // Safe Access
                     const hasNote = mod && mod.note && mod.note.trim().length > 0;
+                    
                     const holiday = HOLIDAYS[dateStr];
                     const isLong = isLongHoliday(dateStr);
                     const isWeekend = dateObj.getDay()===0 || dateObj.getDay()===6;
@@ -424,37 +457,29 @@
                 <div className="max-w-[480px] mx-auto h-screen flex flex-col bg-[#FFFBEB] font-sans shadow-2xl relative" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
                     <div className="bg-[#FDE047] p-5 z-20 rounded-b-[30px] border-b-4 border-[#FCD34D] shadow-sm">
                         <div className="flex justify-between items-center mb-4">
-                             <h1 className="text-2xl font-black text-[#78350F] tracking-wide flex items-center gap-2"><span className="text-3xl drop-shadow-md">🐻</span>百畝森林班表</h1>
-                             <div className="flex gap-1">
-                                <button onClick={copySchedule} className="p-3 bg-white/40 rounded-full text-[#78350F] active:scale-90 border-2 border-[#78350F]/10"><IconCopy className="w-5 h-5"/></button>
-                                <button onClick={handleExit} className={`${exitConfirm?'bg-[#EF4444] animate-pulse':'bg-[#F87171]'} p-3 rounded-full text-white active:scale-90 border-2 border-[#B91C1C]/10`}>{exitConfirm?<IconX className="w-5 h-5"/>:<IconLogOut className="w-5 h-5"/>}</button>
+                             <div className="flex items-center gap-2">
+                                <span className="text-3xl drop-shadow-md mr-1">🐻</span>
+                                <button onClick={()=>changeMonth(-1)} className="p-1.5 bg-white/40 rounded-full text-[#78350F] active:scale-90 border border-[#78350F]/10"><IconChevronLeft /></button>
+                                <div className="flex items-center gap-1 bg-white/50 rounded-xl px-3 py-1.5 shadow-inner border border-white sketchy-border">
+                                    <select value={currentDate.getFullYear()} onChange={(e) => setYear(Number(e.target.value))} className="bg-transparent font-black appearance-none outline-none cursor-pointer text-center text-[#78350F] focus:text-amber-600 transition-colors text-lg">{[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y} className="text-[#78350F] bg-white">{y}</option>)}</select>
+                                    <span className="text-[#78350F]/40 mx-1 font-black">/</span>
+                                    <select value={currentDate.getMonth()} onChange={(e) => setMonth(Number(e.target.value))} className="bg-transparent font-black appearance-none outline-none cursor-pointer text-center text-[#78350F] focus:text-amber-600 transition-colors text-lg">{Array.from({length: 12}, (_, i) => i).map(m => <option key={m} value={m} className="text-[#78350F] bg-white">{m+1}月</option>)}</select>
+                                </div>
+                                <button onClick={()=>changeMonth(1)} className="p-1.5 bg-white/40 rounded-full text-[#78350F] active:scale-90 border border-[#78350F]/10"><IconChevronRight /></button>
+                             </div>
+
+                             <div className="flex gap-2">
+                                <button onClick={copySchedule} className="p-2.5 bg-white/40 rounded-full text-[#78350F] active:scale-90 border-2 border-[#78350F]/10" title="複製文字班表 (存檔)"><IconCopy /></button>
+                                <button onClick={handleExit} className={`${exitConfirm?'bg-[#EF4444] animate-pulse':'bg-[#F87171]'} p-2.5 rounded-full text-white active:scale-90 border-2 border-[#B91C1C]/10`} title="登出/離開">{exitConfirm?<IconX />:<IconLogOut />}</button>
                              </div>
                         </div>
-                        <div className="flex justify-between items-center px-2">
-                            <button onClick={()=>changeMonth(-1)} className="p-2 text-[#78350F] active:scale-90"><IconChevronLeft /></button>
-                            <div className="text-xl font-black text-[#78350F] bg-white/50 px-6 py-2 rounded-2xl border-2 border-white shadow-inner sketchy-border">
-                                {currentDate.getFullYear()} <span className="text-[#78350F]/40 mx-1">/</span> {currentDate.getMonth()+1}月
-                            </div>
-                            <button onClick={()=>changeMonth(1)} className="p-2 text-[#78350F] active:scale-90"><IconChevronRight /></button>
-                        </div>
                         
-                        {/* 🌟 接下來的行程 🌟 */}
-                        <div className="flex justify-start gap-3 mt-4 overflow-x-auto no-scrollbar pb-2 px-1">
-                            {upcomingEvents.length > 0 ? upcomingEvents.map((ev) => {
-                                const d = ev.date;
-                                let content = ev.note || ev.destination || (STICKERS[ev.type] ? STICKERS[ev.type].label : '');
-                                return (
-                                    <div key={ev.dateStr} className={`flex-shrink-0 bg-white/60 p-2 rounded-xl border-2 border-white/50 min-w-[90px] shadow-sm sketchy-border ${ev.isDone ? 'opacity-50' : ''}`}>
-                                        <div className="text-[10px] font-bold text-amber-500 mb-0.5">{d.getMonth()+1}/{d.getDate()} ({WEEKDAYS[d.getDay()]})</div>
-                                        <div className={`text-xs font-black text-[#78350F] truncate w-20 ${ev.isDone ? 'strike-through' : ''}`}>
-                                            <span className="mr-1">{ev.type === 'VACATION' || ev.destination ? '✈️' : '📝'}</span>
-                                            {content}
-                                        </div>
-                                    </div>
-                                )
-                            }) : (
-                                <div className="text-xs text-[#78350F] opacity-50 font-bold px-2 py-2">📅 接下來沒有行程喔~</div>
-                            )}
+                        <div className="flex justify-around mt-2 bg-white/60 rounded-2xl p-2 border-2 border-white/50 shadow-sm sketchy-border">
+                            <div className="flex items-center gap-2">{renderSticker(STICKERS.WORK)}<span className="text-[10px] text-[#78350F] font-bold bg-[#FDE047]/50 px-2 rounded-full">應出勤</span><span className="text-xl font-black text-[#78350F]">{stats.work}</span></div>
+                            <div className="h-6 w-0.5 bg-[#78350F]/10 rounded-full"></div>
+                            <div className="flex items-center gap-2">{renderSticker(STICKERS.OT)}<span className="text-[10px] text-[#78350F] font-bold bg-[#F87171]/30 px-2 rounded-full">加班</span><span className="text-xl font-black text-[#991B1B]">{stats.ot}</span></div>
+                            <div className="h-6 w-0.5 bg-[#78350F]/10 rounded-full"></div>
+                            <div className="flex items-center gap-2"><CuteSunCloud/><span className="text-[10px] text-[#78350F] font-bold bg-stone-200/50 px-2 rounded-full">休假</span><span className="text-xl font-black text-stone-600">{stats.leave}</span></div>
                         </div>
                     </div>
 
@@ -462,8 +487,46 @@
                         <div className="grid grid-cols-7 mb-2 text-center font-black text-[#92400E] text-sm">
                             {['日','一','二','三','四','五','六'].map((d,i)=><div key={d} className={i===0||i===6?'text-[#F43F5E]':''}>{d}</div>)}
                         </div>
-                        <div className="grid grid-cols-7 gap-0 pb-20">
+                        <div className="grid grid-cols-7 gap-0 pb-6">
                             {renderDays()}
+                        </div>
+
+                        {/* 備忘錄列表 */}
+                        <div className="px-2 pb-20">
+                            <div className="flex items-center gap-2 mb-3 text-[#92400E] font-black text-lg border-b-2 border-[#FDE047] pb-1">
+                                <IconFileText className="w-5 h-5"/> <span>近期備忘錄</span>
+                            </div>
+                            <div className="space-y-3">
+                                {upcomingEvents.length > 0 ? upcomingEvents.map(ev => (
+                                    <div key={ev.dateStr} 
+                                        onClick={() => {
+                                            setCurrentDate(new Date(ev.date));
+                                            const diff = Math.round((ev.date - new Date(2025,0,1)) / (1000*60*60*24));
+                                            const bw = (((diff % 4) + 4) % 4) < 2;
+                                            setSelectedDay({ dateStr: ev.dateStr, baseWork: bw });
+                                        }}
+                                        className={`bg-white p-3 rounded-2xl border-2 border-stone-200 shadow-sm flex items-center gap-3 sketchy-border active:scale-95 transition-transform ${ev.isDone ? 'opacity-60' : ''}`}
+                                    >
+                                        <div className="flex flex-col items-center justify-center bg-amber-100 border-2 border-amber-300 rounded-lg px-2 py-1 min-w-[50px]">
+                                            <span className="text-xs font-black text-amber-700">{ev.date.getMonth()+1}/{ev.date.getDate()}</span>
+                                            <span className="text-[10px] font-bold text-amber-600">{WEEKDAYS[ev.date.getDay()]}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className={`font-bold text-stone-700 text-sm truncate ${ev.isDone ? 'strike-through' : ''}`}>
+                                                {ev.note}
+                                            </div>
+                                            {ev.destination && <div className="text-[10px] text-stone-400 truncate mt-0.5">📍 {ev.destination}</div>}
+                                        </div>
+                                        <div className="text-2xl">
+                                            {ev.isDone ? '✅' : '📝'}
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <div className="text-center text-stone-400 text-sm py-8 bg-white/50 rounded-2xl border-2 border-dashed border-stone-200">
+                                        最近沒有待辦事項喔～<br/>點擊日期來新增吧！
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
